@@ -19,12 +19,12 @@ Extension must be loaded at server level with `shared_preload_libraries` paramet
 It can also be created with following SQL statement at server level:<br>
 `create extension pg_set_level;` <br>
 
-This extension has been validated with PostgresSQL 9.5, 9.6, 10, 11, 12 and 13.
+This extension has been validated with PostgreSQL 9.5, 9.6, 10, 11, 12 and 13.
 
 ## Usage
 pg_set_level has 2 specific GUC parameters:<br>
-- pg_set_level.names which the list of GUC comma separated parameters for which SET statement must be modified <br>
-- ps_set_level.action which is the action to run when SET statement is run. Action can be one the message severity level: INFO, NOTICE, WARNING, ERROR, LOG, FATAL. <br>
+- `pg_set_level.names` which the list of GUC comma separated parameters for which SET statement must be modified <br>
+- `ps_set_level.action` which is the action to run when SET statement is run. Action can be one the message severity level: INFO, NOTICE, WARNING, ERROR, LOG, FATAL. <br>
 The same action is run for each parameter.
 
 Note that pg_set_level only works for the SET statement: it does take into account `set_config` function call for any GUC parameter. <br>
@@ -35,13 +35,13 @@ To generate an error when `SET work_mem` is run, add in postgresql.conf: <br>
 `pg_set_level.action='error'`  <br>
 
 Run from psql:<br>
-# show work_mem;<br>
- work_mem <br>
----------- <br>
- 4MB <br>
-(1 row)
+`# show work_mem;i`<br>
+` work_mem`<br>
+`----------` <br>
+` 4MB `<br>
+`(1 row)`
 
-# set work_mem='1G'; <br>
-ERROR:  pg_set_level: set work_mem='1G'; <br>
+`# set work_mem='1G';` <br>
+`ERROR:  pg_set_level: set work_mem='1G';` <br>
 
 
