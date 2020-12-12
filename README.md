@@ -30,12 +30,12 @@ The same action is run for each parameter.
 Note that pg_set_level only works for the SET statement: it does take into account `set_config` function call for any GUC parameter. <br>
 
 ## Example
-To generate an error when `SET work_mem` is run, add in postgresql.conf: <br>
+To generate an error when `SET work_mem` is run, add in `postgresql.conf`: <br>
 `pg_set_level.names='work_mem'` <br>
 `pg_set_level.action='error'`  <br>
 
 Run from psql:<br>
-`# show work_mem;i`<br>
+`# show work_mem;`<br>
 ` work_mem`<br>
 `----------` <br>
 ` 4MB `<br>
