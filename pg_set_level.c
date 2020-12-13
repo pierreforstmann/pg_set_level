@@ -125,10 +125,6 @@ typedef enum  {
 
 static	pgslAction defaultAction;
 
-/*
- * HARD-CODED
- */
-Oid pg_set_config_oid = 2078;
 
 /*
  ** Estimate shared memory space needed.
@@ -222,7 +218,7 @@ pgsl_shmem_startup(void)
 
 
 	/*
- 	 * check settings to lock
+ 	 * check settings 
  	 */
 
 	rawstring = pstrdup(pg_set_level_names);
@@ -324,7 +320,7 @@ _PG_init(void)
 
 	/* get the configuration */
 	DefineCustomStringVariable("pg_set_level.names",
-				"setting names to lock.",
+				"setting name list",
 				NULL,
 				&pg_set_level_names,
 				NULL,
@@ -334,7 +330,7 @@ _PG_init(void)
 				NULL,
 				NULL);
 	DefineCustomStringVariable("pg_set_level.action",
-				"setting lock action",
+				"setting action",
 				NULL,
 				&pg_set_level_action,
 				NULL,
