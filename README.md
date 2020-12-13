@@ -4,7 +4,7 @@ pg_set_level is a PostgreSQL extension which allows to customize the SET stateme
 # Installation
 ## Compiling
 
-This module can be built using the standard PGXS infrastructure. For this to work, the pg_config program must be available in your $PATH:
+This module can be built using the standard PGXS infrastructure. For this to work, the `pg_config` program must be available in your $PATH:
   
 `git clone https://github.com/pierreforstmann/pg_set_level.git` <br>
 `cd pg_set_level` <br>
@@ -23,7 +23,7 @@ This extension has been validated with PostgreSQL 9.5, 9.6, 10, 11, 12 and 13.
 
 ## Usage
 pg_set_level has 2 specific GUC parameters:<br>
-- `pg_set_level.names` which the list of GUC comma separated parameters for which SET statement must be modified <br>
+- `pg_set_level.names` which is the list of GUC comma separated parameters for which SET statement must be modified <br>
 - `ps_set_level.action` which is the action to run when SET statement is run. Action can be one the message severity level: INFO, NOTICE, WARNING, ERROR, LOG, FATAL. <br>
 The same action is run for each parameter.
 
