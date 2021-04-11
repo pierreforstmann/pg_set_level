@@ -27,7 +27,7 @@ pg_set_level has 2 specific GUC parameters:<br>
 - `ps_set_level.action` which is the action to run when SET statement is run. Action can be one the message severity level: INFO, NOTICE, WARNING, ERROR, LOG, FATAL. <br>
 The same action is run for each parameter.
 
-Note that pg_set_level only works for the SET statement: it does take into account `set_config` function call for any GUC parameter. <br>
+Note that pg_set_level only works for the SET statement: it does not take into account `set_config` function call for any GUC parameter. <br>
 
 ## Example
 To generate an error when `SET work_mem` is run, add in `postgresql.conf`: <br>
