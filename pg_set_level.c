@@ -98,6 +98,9 @@ static void pgsl_exec(
 		      PlannedStmt *pstmt,
 #endif
 		      const char *queryString,
+#if PG_VERSION_NUM > 130000
+                      bool readOnlyTree,
+#endif
 		      ProcessUtilityContext context,
 		      ParamListInfo params,
 #if PG_VERSION_NUM > 100000
@@ -421,6 +424,9 @@ pgsl_exec(
 	  PlannedStmt *pstmt,
 #endif
 	  const char *queryString,
+#if PG_VERSION_NUM > 130000
+	  bool readOnlyTree,
+#endif
 	  ProcessUtilityContext context,
 	  ParamListInfo params,
 #if PG_VERSION_NUM > 100000
@@ -494,6 +500,9 @@ pgsl_exec(
 						  pstmt, 
 #endif
 						  queryString,
+#if PG_VERSION_NUM > 130000
+						  readOnlyTree,
+#endif
 						  context, 
 						  params,
 #if PG_VERSION_NUM > 100000
@@ -512,6 +521,9 @@ pgsl_exec(
 					pstmt, 
 #endif
 					queryString,
+#if PG_VERSION_NUM > 130000
+					readOnlyTree,
+#endif
 				       	context,
 					params, 
 #if PG_VERSION_NUM > 100000
