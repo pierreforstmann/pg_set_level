@@ -6,7 +6,7 @@
  * This program is open source, licensed under the PostgreSQL license.
  * For license terms, see the LICENSE file.
  *          
- * Copyright (c) 2020, Pierre Forstmann.
+ * Copyright (c) 2020, 2021, 2022 Pierre Forstmann.
  *            
  *-------------------------------------------------------------------------
 */
