@@ -162,7 +162,7 @@ pgsl_shmem_startup(void)
 	bool		setting_list_is_ok = true;	
 	const char	*return_string;
 
-	elog(DEBUG5, "pg_set_level: pgsl_shmem_startup: entry");
+	elog(LOG, "pg_set_level: pgsl_shmem_startup: entry");
 
 	if (prev_shmem_startup_hook)
 		prev_shmem_startup_hook();
@@ -282,7 +282,7 @@ pgsl_shmem_startup(void)
 		pgsl_enabled = false;
 	}
 
-	elog(DEBUG5, "pg_set_level: pgsl_shmem_startup: exit");
+	elog(LOG, "pg_set_level: pgsl_shmem_startup: exit");
 
 }
 
@@ -296,7 +296,7 @@ pgsl_shmem_startup(void)
 static void
 pgsl_shmem_shutdown(int code, Datum arg)
 {
-	elog(DEBUG5, "pg_set_level: pgsl_shmem_shutdown: entry");
+	elog(LOG, "pg_set_level: pgsl_shmem_shutdown: entry");
 
 	/* Don't do anything during a crash. */
 	if (code)
@@ -308,7 +308,7 @@ pgsl_shmem_shutdown(int code, Datum arg)
 	
 	/* currently: no action */
 
-	elog(DEBUG5, "pg_set_level: pgsl_shmem_shutdown: exit");
+	elog(LOG, "pg_set_level: pgsl_shmem_shutdown: exit");
 }
 
 
@@ -318,7 +318,7 @@ pgsl_shmem_shutdown(int code, Datum arg)
 void
 _PG_init(void)
 {
-	elog(DEBUG5, "pg_set_level: _PG_init(): entry");
+	elog(LOG, "pg_set_level:_PG_init(): entry");
 	
 
 	/* get the configuration */
@@ -332,6 +332,14 @@ _PG_init(void)
 				NULL,
 				NULL,
 				NULL);
+	if (pg_set_level_names == NULL)
+	{
+		/*
+		 * 	if pg_set_level.names is not set, pgsl_shmem_startup fails
+		 */
+		elog(LOG, "pg_set_level:_PG_init(): missing parameter pg_set_level.names");
+		pgsl_enabled = false;
+	}	
 	DefineCustomStringVariable("pg_set_level.action",
 				"setting action",
 				NULL,
@@ -368,7 +376,6 @@ _PG_init(void)
 	else if (strcmp(pg_set_level_action,"info") == 0)
 		defaultAction = PGSL_INFO;	
 
-	elog(LOG, "pg_set_level:_PG_init(): pg_set_level extension detected");
 
 	/*
  	 * cannot call GetConfigOptionByName because can trigger
@@ -387,17 +394,23 @@ _PG_init(void)
 	RequestNamedLWLockTranche("pg_set_level", 1);
 #endif
 
-
 	/*
  	 * Install hooks
 	 */
 
-	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = pgsl_shmem_startup;
-	prev_process_utility_hook = ProcessUtility_hook;
- 	ProcessUtility_hook = pgsl_exec;	
+	if (pgsl_enabled == true)
+	{
+		prev_shmem_startup_hook = shmem_startup_hook;
+		shmem_startup_hook = pgsl_shmem_startup;
+		prev_process_utility_hook = ProcessUtility_hook;
+ 		ProcessUtility_hook = pgsl_exec;	
+	}
 
-	elog(DEBUG5, "pg_set_level: _PG_init(): exit");
+	if (pgsl_enabled == false)
+	{
+		elog(LOG, "pg_set_level:_PG_init(): pg_set_level is not enabled");
+	}
+	elog(LOG, "pg_set_level:_PG_init(): exit");
 }
 
 
@@ -407,13 +420,13 @@ _PG_init(void)
 void
 _PG_fini(void)
 {
-	elog(DEBUG5, "pg_set_level: _PG_fini(): entry");
+	elog(LOG, "pg_set_level: _PG_fini(): entry");
 
 	/* Uninstall hooks. */
 	shmem_startup_hook = prev_shmem_startup_hook;
 	ProcessUtility_hook = prev_process_utility_hook;
 
-	elog(DEBUG5, "pg_set_level: _PG_fini(): exit");
+	elog(LOG, "pg_set_level: _PG_fini(): exit");
 }
 
 static void
