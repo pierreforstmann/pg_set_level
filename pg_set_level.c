@@ -61,6 +61,7 @@ static HTAB *pgsl_hashtable = NULL;
 #include "miscadmin.h"
 #include "storage/procarray.h"
 #include "executor/executor.h"
+#include "catalog/objectaccess.h"
 
 PG_MODULE_MAGIC;
 
@@ -78,6 +79,8 @@ typedef struct pgslSharedState
 /* Saved hook values in case of unload */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
+
+static object_access_hook_type prev_object_access_hook = NULL;
 
 /* Links to shared memory state */
 static pgslSharedState *pgsl= NULL;
@@ -113,6 +116,16 @@ static void pgsl_exec(
 	              QueryCompletion *qc
 #endif
 );
+
+static void pgsl_object_access_hook(ObjectAccessType access,
+				    Oid classId,
+				    Oid objectId,
+				    int subId,
+				    void *arg);
+
+
+/* --- */
+
 static	char	*pg_set_level_names = NULL;	
 static	char	*pg_set_level_action = NULL;	
 static	char	*pg_set_level_default_action = "info";
@@ -404,6 +417,11 @@ _PG_init(void)
 		shmem_startup_hook = pgsl_shmem_startup;
 		prev_process_utility_hook = ProcessUtility_hook;
  		ProcessUtility_hook = pgsl_exec;	
+
+		prev_object_access_hook = object_access_hook;
+		object_access_hook = pgsl_object_access_hook;
+
+		/* set_config oid = 2078 */
 	}
 
 	if (pgsl_enabled == false)
@@ -552,3 +570,14 @@ pgsl_exec(
 	elog(DEBUG1, "pg_set_level: pgsl_exec: exit");
 }
 
+static void
+pgsl_object_access_hook(ObjectAccessType access,
+		        Oid classId,
+			Oid objectId,
+			int subId,
+			void *arg)
+{
+	if (superuser() == false && access == OAT_FUNCTION_EXECUTE && objectId == 2078)
+		elog(ERROR, "pgsl_object_access_hook: OAT_FUNCTION_EXECUTE set_config: access denied.");
+
+}
