@@ -6,7 +6,7 @@
  * This program is open source, licensed under the PostgreSQL license.
  * For license terms, see the LICENSE file.
  *          
- * Copyright (c) 2020, 2021, 2022 Pierre Forstmann.
+ * Copyright (c) 2020, 2021, 2022, 2023, 2024 Pierre Forstmann.
  *            
  *-------------------------------------------------------------------------
 */
@@ -31,7 +31,9 @@
 #include "utils/hsearch.h"
 
 #include "utils/queryenvironment.h"
+#if PG_VERSION_NUM > 130000
 #include "tcop/cmdtag.h"
+#endif
 
 /*
  * parameters hash table:
@@ -53,6 +55,7 @@ typedef struct pgslHashElem {
 } pgslHashElem;
 
 static HTAB *pgsl_hashtable = NULL;
+/* Saved hook values in case of unload */
 
 #include "nodes/nodes.h"
 
@@ -77,6 +80,10 @@ typedef struct pgslSharedState
 } pgslSharedState;
 
 /* Saved hook values in case of unload */
+#if PG_VERSION_NUM >= 150000
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
+#endif
+
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
@@ -93,7 +100,6 @@ void		_PG_init(void);
 void		_PG_fini(void);
 
 static void pgsl_shmem_startup(void);
-static void pgsl_shmem_shutdown(int code, Datum arg);
 static void pgsl_exec(
 #if PG_VERSION_NUM < 100000
 		      Node *parsetree,
@@ -159,15 +165,14 @@ pgsl_memsize(void)
 
 
 /*
- * shmem_startup hook: allocate or attach to shared memory.
- *
+ * pgsl_init_shmem
  */
 static void
 pgsl_shmem_startup(void)
 {
 
-	bool		found;
 	HASHCTL 	hashctl;
+	bool		shmem_found;
 
 	char 		*rawstring;
 	List		*elemlist;
@@ -183,18 +188,18 @@ pgsl_shmem_startup(void)
 	/* reset in case this is a restart within the postmaster */
 	pgsl = NULL;
 
-
 	/*
- 	** Create or attach to the shared memory state
- 	**/
+ 	 * Create or attach to the shared memory state
+ 	 */
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 	pgsl = ShmemInitStruct("pg_set_level",
-			        sizeof(pgslSharedState),
-			        &found);
+				pgsl_memsize(),
+			        &shmem_found);
 
-	if (!found)
+	if (!shmem_found)
 	{
+
 		/* First time through ... */
 #if PG_VERSION_NUM <= 90600
 		RequestAddinLWLocks(1);
@@ -202,86 +207,79 @@ pgsl_shmem_startup(void)
 #else
 		pgsl->lock = &(GetNamedLWLockTranche("pg_set_level"))->lock;
 #endif
-	
-		pgsl->flag1 = false;
-	}
 
-	LWLockRelease(AddinShmemInitLock);
+		LWLockRelease(AddinShmemInitLock);
 
-	/*
-         * If we're in the postmaster (or a standalone backend...), set up a shmem
-         * exit hook (no current need ???) 
-         */ 
-        if (!IsUnderPostmaster)
-		on_shmem_exit(pgsl_shmem_shutdown, (Datum) 0);
+		/*
+ 		** create hash table for parameters
+		*/
 
-	/*
-  	 * Done if some other process already completed our initialization.
-  	 */
-	if (found)
-		return;
-
-	/*
- 	** create hash table for parameters
-	*/
-
-        memset(&hashctl, 0, sizeof(hashctl));
-        hashctl.keysize = sizeof(pgslHashKey);
-    	hashctl.entrysize = sizeof(pgslHashElem);
-	pgsl_hashtable = ShmemInitHash("pg_set_level hash table", pgsl_max, pgsl_max, &hashctl,
-				       HASH_ELEM );
-        elog(DEBUG5, "pg_set_level: ShmemInitHash: OK");
+        	memset(&hashctl, 0, sizeof(hashctl));
+	        hashctl.keysize = sizeof(pgslHashKey);
+	    	hashctl.entrysize = sizeof(pgslHashElem);
+		pgsl_hashtable = ShmemInitHash("pg_set_level hash table", pgsl_max, pgsl_max, &hashctl,
+#if PG_VERSION_NUM < 140000 
+					       HASH_ELEM);
+#else
+					       HASH_ELEM | HASH_STRINGS);
+#endif
 
 
-	/*
- 	 * check settings 
- 	 */
+		/*
+ 		 * check settings 
+	 	 */
 
-	rawstring = pstrdup(pg_set_level_names);
-	if (!SplitIdentifierString(rawstring, ',', &elemlist))
-	{
-		/* syntax error in list */
-		elog(WARNING, "pg_set_level: list syntax is invalid");
-		/* disable extension ... */
-		setting_list_is_ok = false;
-	}
-
-	if (setting_list_is_ok == true) 
-	{
-		foreach (l, elemlist)
+		rawstring = pstrdup(pg_set_level_names);
+		if (!SplitIdentifierString(rawstring, ',', &elemlist))
 		{
-			char	*tok = (char *)lfirst(l);
+			/* syntax error in list */
+			elog(WARNING, "pg_set_level: list syntax is invalid");
+			/* disable extension ... */
+			setting_list_is_ok = false;
+		}
 
-			return_string = GetConfigOption(tok, true, false);
-			if (return_string == NULL)
+		if (setting_list_is_ok == true) 
+		{
+			foreach (l, elemlist)
 			{
-				elog(WARNING, "pg_set_level: %s is a unknown option", tok);
-				setting_list_is_ok = false;
-			}
-			else
-			{
-				pgslHashKey key;
-				bool found;
-				pgslHashElem *elem;
-				strcpy(key.name, tok);
-				/*
- 				** use HASH_ENTER to get valid memory pointer assigned to elem
-				*/
-				elem = hash_search(pgsl_hashtable, (void *)&key, HASH_ENTER, &found);	
-				if (found)
-		            		elog(DEBUG5, "pgsl_shmem_startup: Found entry %s before it was supposed to be added", key.name);
-		        	else 
-				{				
-            				elog(DEBUG5, "pgsl_shmem_startup: %s entry added", key.name);
+				char	*tok = (char *)lfirst(l);
+
+				return_string = GetConfigOption(tok, true, false);
+				if (return_string == NULL)
+				{
+					elog(WARNING, "pg_set_level: %s is a unknown option", tok);
+					setting_list_is_ok = false;
 				}
+				else
+				{
+					pgslHashKey key;
+					bool found;
+					pgslHashElem *elem;
+					strcpy(key.name, tok);
+					/*
+ 					** use HASH_ENTER to get valid memory pointer assigned to elem
+					*/
+					elem = hash_search(pgsl_hashtable, (void *)&key, HASH_ENTER, &found);	
+					if (found)
+					{
+			            		elog(DEBUG5, "pgsl_shmem_startup: Found entry %s before it was supposed to be added", key.name);
+					}
+		        		else 
+					{				
+        	    				elog(DEBUG5, "pgsl_shmem_startup: %s entry added", key.name);
+					}
+					/*
+					 * make compiler happy
+				 	*/
+					elem = elem; 
 				
+				}	
 			}
 		}
+
+		pfree(rawstring);
+		list_free(elemlist);
 	}
-
-
-	pfree(rawstring);
-	list_free(elemlist);
 
 	/*
  	 * disable extension if some check has failed
@@ -300,29 +298,34 @@ pgsl_shmem_startup(void)
 }
 
 /*
+ * shmen_request_hook
  *
- *  shmem_shutdown hook
- *   
- *  Note: we don't bother with acquiring lock, because there should be no
- *  other processes running when this is called.
  */
 static void
-pgsl_shmem_shutdown(int code, Datum arg)
+pgsl_shmem_request(void)
 {
-	elog(LOG, "pg_set_level: pgsl_shmem_shutdown: entry");
 
-	/* Don't do anything during a crash. */
-	if (code)
-		return;
+	elog(LOG, "pg_set_level: pgsl_shmem_request(): entry");
 
-	/* Safety check ... shouldn't get here unless shmem is set up. */
-	if (!pgsl)
-		return;
-	
-	/* currently: no action */
+	/*
+ 	 * Request additional shared resources.  (These are no-ops if we're not in
+ 	 * the postmaster process.)  We'll allocate or attach to the shared
+ 	 * resources in pgsl_shmem_startup().
+	 */
 
-	elog(LOG, "pg_set_level: pgsl_shmem_shutdown: exit");
+#if PG_VERSION_NUM >= 150000
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+#endif
+
+	RequestAddinShmemSpace(pgsl_memsize());
+#if PG_VERSION_NUM >= 90600
+	RequestNamedLWLockTranche("pg_set_level", 1);
+#endif
+
+	elog(LOG, "pg_set_level: pgsl_shmem_request(): exit");
 }
+
 
 
 /*
@@ -345,6 +348,7 @@ _PG_init(void)
 				NULL,
 				NULL,
 				NULL);
+
 	if (pg_set_level_names == NULL)
 	{
 		/*
@@ -353,6 +357,7 @@ _PG_init(void)
 		elog(LOG, "pg_set_level:_PG_init(): missing parameter pg_set_level.names");
 		pgsl_enabled = false;
 	}	
+
 	DefineCustomStringVariable("pg_set_level.action",
 				"setting action",
 				NULL,
@@ -398,23 +403,21 @@ _PG_init(void)
 
 	
 	/*
- 	 * Request additional shared resources.  (These are no-ops if we're not in
- 	 * the postmaster process.)  We'll allocate or attach to the shared
- 	 * resources in pgsl_shmem_startup().
-	 */
-	RequestAddinShmemSpace(pgsl_memsize());
-#if PG_VERSION_NUM >= 90600
-	RequestNamedLWLockTranche("pg_set_level", 1);
-#endif
-
-	/*
  	 * Install hooks
 	 */
 
 	if (pgsl_enabled == true)
 	{
+
+#if PG_VERSION_NUM >= 150000
+		prev_shmem_request_hook = shmem_request_hook;
+		shmem_request_hook = pgsl_shmem_request;
+#else
+		pgsl_shmem_request();
+#endif
 		prev_shmem_startup_hook = shmem_startup_hook;
 		shmem_startup_hook = pgsl_shmem_startup;
+
 		prev_process_utility_hook = ProcessUtility_hook;
  		ProcessUtility_hook = pgsl_exec;	
 
@@ -513,6 +516,10 @@ pgsl_exec(
 			{
 				elog(DEBUG1, "pg_set_level: pgsl_exec: setstmt->name=%s not found", setstmt->name);
 			}
+			/*
+			 * make compiler happy
+			 */
+			elem = elem;
 			
 		}
 	}

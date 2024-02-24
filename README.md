@@ -19,7 +19,7 @@ Extension must be loaded at server level with `shared_preload_libraries` paramet
 It can also be created with following SQL statement at server level:<br>
 `create extension pg_set_level;` <br>
 
-This extension has been validated with PostgreSQL 9.5, 9.6, 10, 11, 12, 13 and 14.
+This extension has been validated with PostgreSQL 9.5, 9.6, 10, 11, 12, 13, 14, 15 and 16.
 
 ## Usage
 pg_set_level has 2 specific GUC parameters:<br>
