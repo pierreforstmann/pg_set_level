@@ -24,15 +24,15 @@ This extension has been validated with PostgreSQL 9.5, 9.6, 10, 11, 12, 13, 14, 
 ## Usage
 pg_set_level has 2 specific GUC parameters:<br>
 - `pg_set_level.names` which is the list of GUC comma separated parameters for which SET statement must be modified <br>
-- `ps_set_level.action` which is the action to run when SET statement is run. Action can be one the message severity level: INFO, NOTICE, WARNING, ERROR, LOG, FATAL. <br>
-The same action is run for each parameter.
+- `ps_set_level.actions` which is the list of comma separated actions to run when SET statement is run. Action can be one the message severity level: INFO, NOTICE, WARNING, ERROR, LOG, FATAL. The first action is run for first parameter and so on.
+<br>
 
 Note that pg_set_level only works for the SET statement: it does not take into account `set_config` function call for any GUC parameter. <br>
 
 ## Example
 To generate an error when `SET work_mem` is run, add in `postgresql.conf`: <br>
 `pg_set_level.names='work_mem'` <br>
-`pg_set_level.action='error'`  <br>
+`pg_set_level.actions='error'`  <br>
 
 Run from psql:<br>
 `# show work_mem;`<br>

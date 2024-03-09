@@ -1,0 +1,48 @@
+
+   "name": "pg_set_level",
+   "abstract": "trigger action for SET statement"
+   "version": "0.0.1",
+   "release_status":"testing",
+   "maintainer": [
+      "Pierre Forstmann"
+   ],
+   "license": {
+      "PostgreSQL": "http://www.postgresql.org/about/licence"
+   },
+   "prereqs": {
+      "runtime": {
+         "requires": {
+            "PostgreSQL": "11.0.0"
+         },
+         "recommends": {
+            "PostgreSQL": "15.0.0"
+         }
+      }
+   },
+   "provides": {
+     "pg_set_level": {
+         "abstract": "trigger action for SET statement",
+         "docfile": "README.md",
+         "version": "0.0.1"
+      }
+   },
+   "resources": {
+      "bugtracker": {
+         "web": "http://github.com/pierreforstmann/pg_set_level/issues"
+      },
+      "repository": {
+        "url":  "https://github.com/pierreforstmann/pg_set_level.git",
+        "web":  "https://github.com/pierreforstmann/pg_set_level",
+        "type": "git"
+      }
+   },
+   "generated_by": "Pierre Forstmann",
+   "meta-spec": {
+      "version": "1.0.0",
+      "url": "http://pgxn.org/meta/spec.txt"
+   },
+   "tags": [
+      "SET statement",
+      "INFO, LOG, NOTICE, WARNING, ERROR, FATAL"
+   ]
+}

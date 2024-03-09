@@ -46,12 +46,14 @@ static const int pgsl_max = 100;
  * add 1 for binary null ending character
  */
 #define MAX_OPTION_NAME_LENGTH	39
+#define MAX_ACTION_NAME_LENGTH	8
 typedef struct pgslHashKey {
    char	name[MAX_OPTION_NAME_LENGTH];
 } pgslHashKey;
 
 typedef struct pgslHashElem {
     pgslHashKey key;
+	int action;
 } pgslHashElem;
 
 static HTAB *pgsl_hashtable = NULL;
@@ -133,20 +135,16 @@ static void pgsl_object_access_hook(ObjectAccessType access,
 /* --- */
 
 static	char	*pg_set_level_names = NULL;	
-static	char	*pg_set_level_action = NULL;	
-static	char	*pg_set_level_default_action = "info";
+static	char	*pg_set_level_actions = NULL;	
 
 typedef enum  {
-        PGSL_INFO,
-        PGSL_LOG,
-        PGSL_NOTICE,
+    PGSL_INFO,
+    PGSL_LOG,
+    PGSL_NOTICE,
 	PGSL_WARNING,
 	PGSL_ERROR,
 	PGSL_FATAL
 } pgslAction;
-
-static	pgslAction defaultAction;
-
 
 /*
  ** Estimate shared memory space needed.
@@ -174,11 +172,15 @@ pgsl_shmem_startup(void)
 	HASHCTL 	hashctl;
 	bool		shmem_found;
 
-	char 		*rawstring;
-	List		*elemlist;
-	ListCell	*l;
+	char 		*rawstring_names;
+	char		*rawstring_actions;
+	List		*elemlist_names;
+	List        *elemlist_actions;
+	ListCell	*l_name;
+	ListCell    *l_action;
 	bool		setting_list_is_ok = true;	
 	const char	*return_string;
+	int			action;
 
 	elog(LOG, "pg_set_level: pgsl_shmem_startup: entry");
 
@@ -229,8 +231,16 @@ pgsl_shmem_startup(void)
  		 * check settings 
 	 	 */
 
-		rawstring = pstrdup(pg_set_level_names);
-		if (!SplitIdentifierString(rawstring, ',', &elemlist))
+		rawstring_names = pstrdup(pg_set_level_names);
+		if (!SplitIdentifierString(rawstring_names, ',', &elemlist_names))
+		{
+			/* syntax error in list */
+			elog(WARNING, "pg_set_level: list syntax is invalid");
+			/* disable extension ... */
+			setting_list_is_ok = false;
+		}
+		rawstring_actions = pstrdup(pg_set_level_actions);
+		if (!SplitIdentifierString(rawstring_actions, ',', &elemlist_actions))
 		{
 			/* syntax error in list */
 			elog(WARNING, "pg_set_level: list syntax is invalid");
@@ -238,35 +248,65 @@ pgsl_shmem_startup(void)
 			setting_list_is_ok = false;
 		}
 
+
 		if (setting_list_is_ok == true) 
 		{
-			foreach (l, elemlist)
+			forboth (l_name, elemlist_names, l_action, elemlist_actions)
 			{
-				char	*tok = (char *)lfirst(l);
+				char	*tok_name = (char *)lfirst(l_name);
+				char	*tok_action = (char *)lfirst(l_action);
 
-				return_string = GetConfigOption(tok, true, false);
+				return_string = GetConfigOption(tok_name, true, false);
 				if (return_string == NULL)
 				{
-					elog(WARNING, "pg_set_level: %s is a unknown option", tok);
+					elog(WARNING, "pg_set_level: %s is a unknown option", tok_name);
+					setting_list_is_ok = false;
+				};
+		
+				if (strcmp(tok_action,"fatal") != 0 && 
+	    			strcmp(tok_action,"error") != 0 && 
+            		strcmp(tok_action,"warning") != 0 &&
+            		strcmp(tok_action,"notice") != 0 &&
+            		strcmp(tok_action,"log") != 0 &&
+		            strcmp(tok_action,"info") != 0) 
+				{
+					elog(WARNING, "unrecognized pg_set_level_action: %s", tok_action);
 					setting_list_is_ok = false;
 				}
-				else
+				
+				action = INFO;
+				if (strcmp(tok_action, "fatal") == 0)
+					action = FATAL;
+				else if (strcmp(tok_action, "error") == 0)
+					action = ERROR;
+				else if (strcmp(tok_action, "warning") == 0)
+					action = WARNING;
+				else if (strcmp(tok_action, "notice") == 0)
+					action = NOTICE;
+				else if (strcmp(tok_action, "log") == 0)
+					action = LOG;
+				else if (strcmp(tok_action, "info") == 0)
+					action = INFO;
+
+				if (setting_list_is_ok == true)
 				{
 					pgslHashKey key;
 					bool found;
 					pgslHashElem *elem;
-					strcpy(key.name, tok);
+					strcpy(key.name, tok_name);
+					
 					/*
  					** use HASH_ENTER to get valid memory pointer assigned to elem
 					*/
 					elem = hash_search(pgsl_hashtable, (void *)&key, HASH_ENTER, &found);	
 					if (found)
 					{
-			            		elog(DEBUG5, "pgsl_shmem_startup: Found entry %s before it was supposed to be added", key.name);
+			            		elog(DEBUG1, "pgsl_shmem_startup: Found entry %s before it was supposed to be added", key.name);
 					}
 		        		else 
-					{				
-        	    				elog(DEBUG5, "pgsl_shmem_startup: %s entry added", key.name);
+					{			
+        	    				elog(DEBUG1, "pgsl_shmem_startup: %s-%d entry added", key.name, action);
+								elem->action = action;
 					}
 					/*
 					 * make compiler happy
@@ -277,8 +317,10 @@ pgsl_shmem_startup(void)
 			}
 		}
 
-		pfree(rawstring);
-		list_free(elemlist);
+		pfree(rawstring_names);
+		pfree(rawstring_actions);
+		list_free(elemlist_names);
+		list_free(elemlist_actions);
 	}
 
 	/*
@@ -358,42 +400,21 @@ _PG_init(void)
 		pgsl_enabled = false;
 	}	
 
-	DefineCustomStringVariable("pg_set_level.action",
+	DefineCustomStringVariable("pg_set_level.actions",
 				"setting action",
 				NULL,
-				&pg_set_level_action,
+				&pg_set_level_actions,
 				NULL,
 				PGC_POSTMASTER,
 				0,
 				NULL,
 				NULL,
 				NULL);
-	if (pg_set_level_action == NULL)
-		pg_set_level_action = pg_set_level_default_action;	
-
-	if (strcmp(pg_set_level_action,"fatal") != 0 && 
-	    strcmp(pg_set_level_action,"error") != 0 && 
-            strcmp(pg_set_level_action,"warning") != 0 &&
-            strcmp(pg_set_level_action,"notice") != 0 &&
-            strcmp(pg_set_level_action,"log") != 0 &&
-            strcmp(pg_set_level_action,"info") != 0) 
+	if (pg_set_level_actions == NULL)
 	{
-		elog(WARNING, "unrecognized pg_set_level_action: %s", pg_set_level_action);
-		pg_set_level_action = pg_set_level_default_action;	
+		elog(LOG, "pg_set_level:_PG_init(): missing parameter pg_set_level.actions");
+		pgsl_enabled = false;
 	}
-	if (strcmp(pg_set_level_action,"fatal") == 0)
-		defaultAction = PGSL_FATAL;
-	else if (strcmp(pg_set_level_action,"error") == 0)
-		defaultAction = PGSL_ERROR;
-	else if (strcmp(pg_set_level_action,"warning") == 0)
-		defaultAction = PGSL_WARNING;	
-	else if (strcmp(pg_set_level_action,"notice") == 0)
-		defaultAction = PGSL_NOTICE;	
-	else if (strcmp(pg_set_level_action,"log") == 0)
-		defaultAction = PGSL_LOG;	
-	else if (strcmp(pg_set_level_action,"info") == 0)
-		defaultAction = PGSL_INFO;	
-
 
 	/*
  	 * cannot call GetConfigOptionByName because can trigger
@@ -491,26 +512,16 @@ pgsl_exec(
 		{
 			pgslHashKey key;
 			pgslHashElem *elem;
-                        bool found;
+            bool found;
 
 			elog(DEBUG1, "pg_set_level: pgsl_exec: setstmt->name=%s", setstmt->name);
-                        strcpy(key.name, setstmt->name);
-                        elem = hash_search(pgsl_hashtable, (void *)&key, HASH_FIND, &found);
+            strcpy(key.name, setstmt->name);
+            elem = hash_search(pgsl_hashtable, (void *)&key, HASH_FIND, &found);
 			if (found)
 			{
-				elog(DEBUG1, "pg_set_level: pgsl_exec: setstmt->name=%s found", setstmt->name);
-				if (defaultAction == PGSL_FATAL)
-					elog(FATAL, "pg_set_level: %s", queryString);
-				else if (defaultAction == PGSL_ERROR)
-					elog(ERROR, "pg_set_level: %s", queryString);
-				else if (defaultAction == PGSL_WARNING)
-					elog(WARNING, "pg_set_level: %s", queryString);
-				else if (defaultAction == PGSL_LOG)
-					elog(LOG, "pg_set_level: %s", queryString);
-				else if (defaultAction == PGSL_NOTICE)
-					elog(NOTICE, "pg_set_level: %s", queryString);
-				else if (defaultAction == PGSL_INFO)
-					elog(INFO, "pg_set_level: %s", queryString);
+				elog(DEBUG1, "pg_set_level: pgsl_exec: setstmt->name=%s action=%d found", 
+								setstmt->name, elem->action);
+				elog(elem->action, "pg_set_level: %s", queryString);
 			}
 			else 
 			{
