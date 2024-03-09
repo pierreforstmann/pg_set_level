@@ -7,3 +7,6 @@ DATA = pg_set_level--0.0.1.sql    # script file to install
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+pgxn:
+	git archive --format zip  --output ../pgxn/pg_set_level/pg_set_level-0.0.1.zip master
