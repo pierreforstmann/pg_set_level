@@ -163,7 +163,7 @@ pgsl_memsize(void)
 
 
 /*
- * pgsl_init_shmem
+ * pgsl_shmem_startup
  */
 static void
 pgsl_shmem_startup(void)
@@ -216,9 +216,9 @@ pgsl_shmem_startup(void)
  		** create hash table for parameters
 		*/
 
-        	memset(&hashctl, 0, sizeof(hashctl));
-	        hashctl.keysize = sizeof(pgslHashKey);
-	    	hashctl.entrysize = sizeof(pgslHashElem);
+        memset(&hashctl, 0, sizeof(hashctl));
+	    hashctl.keysize = sizeof(pgslHashKey);
+	    hashctl.entrysize = sizeof(pgslHashElem);
 		pgsl_hashtable = ShmemInitHash("pg_set_level hash table", pgsl_max, pgsl_max, &hashctl,
 #if PG_VERSION_NUM < 140000 
 					       HASH_ELEM);
@@ -235,7 +235,7 @@ pgsl_shmem_startup(void)
 		if (!SplitIdentifierString(rawstring_names, ',', &elemlist_names))
 		{
 			/* syntax error in list */
-			elog(WARNING, "pg_set_level: list syntax is invalid");
+			elog(WARNING, "pg_set_level: pg_set_level.names list syntax is invalid");
 			/* disable extension ... */
 			setting_list_is_ok = false;
 		}
@@ -243,11 +243,16 @@ pgsl_shmem_startup(void)
 		if (!SplitIdentifierString(rawstring_actions, ',', &elemlist_actions))
 		{
 			/* syntax error in list */
-			elog(WARNING, "pg_set_level: list syntax is invalid");
+			elog(WARNING, "pg_set_level: pg_set_level.actions list syntax is invalid");
 			/* disable extension ... */
 			setting_list_is_ok = false;
 		}
 
+		if (list_length(elemlist_names) != list_length(elemlist_actions))
+		{
+			elog(LOG, "pg_set_level: pg_set_level.names and pg_set_level.actions mismatch");
+			setting_list_is_ok = false;
+		}
 
 		if (setting_list_is_ok == true) 
 		{
@@ -255,22 +260,23 @@ pgsl_shmem_startup(void)
 			{
 				char	*tok_name = (char *)lfirst(l_name);
 				char	*tok_action = (char *)lfirst(l_action);
+			
 
 				return_string = GetConfigOption(tok_name, true, false);
 				if (return_string == NULL)
 				{
-					elog(WARNING, "pg_set_level: %s is a unknown option", tok_name);
+					elog(WARNING, "pg_set_level: %s is a unknown parameter", tok_name);
 					setting_list_is_ok = false;
 				};
 		
 				if (strcmp(tok_action,"fatal") != 0 && 
-	    			strcmp(tok_action,"error") != 0 && 
-            		strcmp(tok_action,"warning") != 0 &&
-            		strcmp(tok_action,"notice") != 0 &&
-            		strcmp(tok_action,"log") != 0 &&
-		            strcmp(tok_action,"info") != 0) 
+					strcmp(tok_action,"error") != 0 && 
+					strcmp(tok_action,"warning") != 0 &&
+					strcmp(tok_action,"notice") != 0 &&
+					strcmp(tok_action,"log") != 0 &&
+					strcmp(tok_action,"info") != 0) 
 				{
-					elog(WARNING, "unrecognized pg_set_level_action: %s", tok_action);
+					elog(WARNING, "unrecognized action : %s", tok_action);
 					setting_list_is_ok = false;
 				}
 				
@@ -305,7 +311,7 @@ pgsl_shmem_startup(void)
 					}
 		        		else 
 					{			
-        	    				elog(DEBUG1, "pgsl_shmem_startup: %s-%d entry added", key.name, action);
+        	    				elog(LOG, "pgsl_shmem_startup: %s - %d entry added", key.name, action);
 								elem->action = action;
 					}
 					/*
@@ -322,6 +328,8 @@ pgsl_shmem_startup(void)
 		list_free(elemlist_names);
 		list_free(elemlist_actions);
 	}
+
+
 
 	/*
  	 * disable extension if some check has failed
