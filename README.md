@@ -30,18 +30,19 @@ pg_set_level has 2 specific GUC parameters:<br>
 Note that pg_set_level only works for the SET statement: it does not take into account `set_config` function call for any GUC parameter. <br>
 
 ## Example
-To generate an error when `SET work_mem` is run, add in `postgresql.conf`: <br>
-`pg_set_level.names='work_mem'` <br>
-`pg_set_level.actions='error'`  <br>
+Add in `postgresql.conf`: <br>
+`pg_set_level.names='work_mem, search_path, datestyle` <br>
+`pg_set_level.actions='INFO, NOTICE, WARNING'` <br>
 
 Run from psql:<br>
-`# show work_mem;`<br>
-` work_mem`<br>
-`----------` <br>
-` 4MB `<br>
-`(1 row)`
-
-`# set work_mem='1G';` <br>
-`ERROR:  pg_set_level: set work_mem='1G';` <br>
-
-
+```
+#set work_mem='1GB'; 
+INFO:  pg_set_level: set work_mem='1GB'; 
+SET 
+#set search_path=''; 
+NOTICE:  pg_set_level: set search_path=''; 
+SET
+#set datestyle='dmy'; 
+WARNING:  pg_set_level: set datestyle='dmy'; 
+SET
+```
