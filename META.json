@@ -1,6 +1,6 @@
 {
    "name": "pg_set_level",
-   "abstract": "trigger action for SET statement"
+   "abstract": "trigger action for SET statement",
    "version": "0.0.1",
    "release_status":"testing",
    "maintainer": [
