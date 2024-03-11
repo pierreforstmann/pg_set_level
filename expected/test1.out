@@ -1,0 +1,81 @@
+--
+-- test1.sql
+--
+create extension pg_set_level;
+--
+show work_mem;
+ work_mem 
+----------
+ 4MB
+(1 row)
+
+set work_mem='1GB';
+ERROR:  pg_set_level: set work_mem='1GB';
+show work_mem;
+ work_mem 
+----------
+ 4MB
+(1 row)
+
+--
+show search_path;
+   search_path   
+-----------------
+ "$user", public
+(1 row)
+
+set search_path='';
+WARNING:  pg_set_level: set search_path='';
+show search_path;
+ search_path 
+-------------
+ ""
+(1 row)
+
+--
+show datestyle;
+   DateStyle   
+---------------
+ Postgres, MDY
+(1 row)
+
+set datestyle='dmy';
+NOTICE:  pg_set_level: set datestyle='dmy';
+show datestyle;
+   DateStyle   
+---------------
+ Postgres, DMY
+(1 row)
+
+--
+show log_statement;
+ log_statement 
+---------------
+ none
+(1 row)
+
+set log_statement='all';
+INFO:  pg_set_level: set log_statement='all';
+show log_statement;
+ log_statement 
+---------------
+ all
+(1 row)
+
+--
+show log_min_messages;
+ log_min_messages 
+------------------
+ warning
+(1 row)
+
+set log_min_messages=debug1;
+-- output only in instance log
+show log_min_messages;
+ log_min_messages 
+------------------
+ debug1
+(1 row)
+
+--
+-- not possible to test FATAL because breaks connection with PG
